@@ -113,6 +113,9 @@ private:
 	int source;
 	int sink;
 	
+	vector<list<Arc> > adj;		//lista de adjacencia
+	vector<list<Arc*> > inc;	//lista de ponteiros de arcos incidentes
+
 	vector<double> demand;
 	vector<double> parcialCost;
 	vector<int> depth;
@@ -155,7 +158,7 @@ private:
 		this->setDepth(fonte, 0);
 		label[fonte] = true;//nao quero por arcos para mim mesmo
 
-		for(auto& arc : this->adj[fonte])
+		for(auto& arc : this->neighborsOf(fonte))
 		{
 			label[arc.getTarget()] = true;
 			this->setParcialCost(arc.getTarget(), 0);
@@ -184,15 +187,15 @@ private:
 		
 		/*PRIMEIRO APAGO AS REFERENCIAS*/
 		for(int i = 0; i < this->getV(); i++)
-			for(it = inc[i].begin(); it != inc[i].end();)
+			for(it = this->incidentArcsOn(i).begin(); it != this->incidentArcsOn(i).end();)
 				if(!(*it)->isOriginal())
-					it = inc[i].erase(it);
+					it = this->incidentArcsOn(i).erase(it);
 				else
 					it++;
 		/*DEPOIS OS ARCOS DE FATO(só a fonte de arcos artificiais saindo)*/
-		for(it2 = adj[fonte].begin(); it2 != adj[fonte].end();)
+		for(it2 = this->neighborsOf(fonte).begin(); it2 != this->neighborsOf(fonte).end();)
 			if(!(*it2).isOriginal())
-				it2 = adj[fonte].erase(it2);
+				it2 = this->neighborsOf(fonte).erase(it2);
 			else
 				it2++;
 	}
@@ -200,7 +203,7 @@ private:
 	Arc* findEnteringArc(bool ini)//ini diz se usaresmos os custos artificiais ou não
 	{
 		for(int i = 0; i < this->getV(); i++)
-			for(auto& arc : this->adj[i])
+			for(auto& arc : this->neighborsOf(i))
 				if(!arc.isOnTree() and ((getParcialCost(i)+arc.getCost(ini)) < getParcialCost(arc.getTarget())))
 					return &arc;
 
@@ -227,7 +230,7 @@ private:
 		while(diff_c > 0)
 		{
 			aux = false;
-			for(auto& arc : adj[v_atual])
+			for(auto& arc : this->neighborsOf(v_atual))
 				if(arc.isOnTree() and depth[v_atual] > depth[arc.getTarget()])
 				{	
 					ciclo.push_back(&arc);
@@ -241,7 +244,7 @@ private:
 					break;
 				}
 			if(!aux)
-				for(auto& arc_ptr : inc[v_atual])
+				for(auto& arc_ptr : this->incidentArcsOn(v_atual))
 					if(arc_ptr->isOnTree() and depth[v_atual] > depth[arc_ptr->getOrigin()])
 					{
 						ciclo.push_back(arc_ptr);
@@ -266,7 +269,7 @@ private:
 		{
 			/************** ANALISA LADO QUE ERA O MAIOR ANTES ***********/
 			aux = false;
-			for(auto& arc : adj[v_atual1])
+			for(auto& arc : this->neighborsOf(v_atual1))
 			{	
 				if(arc.isOnTree() and depth[v_atual1] > depth[arc.getTarget()])
 				{
@@ -284,7 +287,7 @@ private:
 			}
 	
 			if(!aux)
-				for(auto& arc_ptr : inc[v_atual1])
+				for(auto& arc_ptr : this->incidentArcsOn(v_atual1))
 				{
 					if(arc_ptr->isOnTree() and depth[v_atual1] > depth[arc_ptr->getOrigin()])
 					{
@@ -301,7 +304,7 @@ private:
 				}
 			/********************** OUTRO LADO **************************/
 			aux = false;
-			for(auto& arc : adj[v_atual2])
+			for(auto& arc : this->neighborsOf(v_atual2))
 			{
 				if(arc.isOnTree() and depth[v_atual2] > depth[arc.getTarget()])
 				{
@@ -318,7 +321,7 @@ private:
 				}
 			}
 			if(!aux)
-				for(auto& arc_ptr : inc[v_atual2])
+				for(auto& arc_ptr : this->incidentArcsOn(v_atual2))
 				{
 					if(arc_ptr->isOnTree() and depth[v_atual2] > depth[arc_ptr->getOrigin()])
 					{
@@ -399,7 +402,7 @@ private:
 			fila.pop();
 			aux = false;
 			
-			for(it1 = adj[v_atual].begin(); it1 != adj[v_atual].end(); it1++)//olho lista de adjacencia
+			for(it1 = this->neighborsOf(v_atual).begin(); it1 != this->neighborsOf(v_atual).end(); it1++)//olho lista de adjacencia
 			{
 				vizinho = (*it1).getTarget();
 				if((*it1).isOnTree() and !lbl[vizinho])
@@ -411,7 +414,7 @@ private:
 					aux = true;
 				}
 			}
-			for(it2 = inc[v_atual].begin(); !aux and it2 != inc[v_atual].end(); it2++)//olho lista de incidencia
+			for(it2 = this->incidentArcsOn(v_atual).begin(); !aux and it2 != this->incidentArcsOn(v_atual).end(); it2++)//olho lista de incidencia
 			{
 				vizinho = (*it2)->getOrigin();
 				if((*it2)->isOnTree() and !lbl[vizinho])
@@ -426,8 +429,6 @@ private:
 	}
 
 public:
-	vector<list<Arc> > adj;
-	vector<list<Arc*> > inc;
 
 	Network(fstream& file)
 	{
@@ -480,12 +481,22 @@ public:
 		Arc arco (a, b, custo, fluxo);
 		Arc* ac;
 
-		adj[a].push_back(arco);
-		ac = &adj[a].back();
+		this->neighborsOf(a).push_back(arco);
+		ac = &this->neighborsOf(a).back();
 		
-		inc[b].push_back(ac);
+		this->incidentArcsOn(b).push_back(ac);
 
 		return ac;
+	}
+
+	list<Arc>& neighborsOf(int v)
+	{
+		return this->adj[v];
+	}
+
+	list<Arc*>& incidentArcsOn(int v)
+	{
+		return this->inc[v];
 	}
 
 	bool initialize()
@@ -508,7 +519,7 @@ public:
 
 		/*VERIFICO SE TODOS OS ARCOS DA ARVORE SÃO ORIGINAIS*/
 		list<Arc>::iterator it;
-		for(it = adj[fonte].begin(); it != adj[fonte].end(); it++)
+		for(it = this->neighborsOf(fonte).begin(); it != this->neighborsOf(fonte).end(); it++)
 			if((*it).isOnTree() and !(*it).isOriginal())
 				return false;
 		
@@ -542,7 +553,7 @@ public:
 		int pia = this->getSink();
 
 		for(int i = 0; i < this->getV(); i++)
-			for(auto& arco : adj[i])
+			for(auto& arco : this->neighborsOf(i))
 				if(arco.isOnTree())
 					printf("%d, %d - %f\n",arco.getOrigin(), arco.getTarget(), arco.getFlow());
 		
