@@ -4,33 +4,35 @@
 #include <stdio.h>
 #include <cmath>
 #include <queue>
+#include <fstream>
+#include <string>
 
 using namespace std;
 
-class Arco
+class Arc
 {
 
 private:
 	int a;
 	int b;
-	double custo;
-	double fluxo;
-	int p;//custo artificial
-	bool tree;
-	bool reverso;
+	double cost;
+	double flow;
+	int p;			//custo artificial(0 ou 1, só é utilizado na inicialização)
+	bool tree;		//esta na arvore atual?
+	bool reverse;	//é arco reverso?
 public:
-	Arco(int a, int b, double c, double f)
+	Arc(int a, int b, double c, double f)
 	{
 		this->a = a;
 		this->b = b;
-		this->custo = c;
-		this->fluxo = f;
-		this->p = 0;//arcos originais tem custo artificial zero
+		this->cost = c;
+		this->flow = f;
+		this->p = 0;		//arcos originais tem custo artificial zero
 		this->tree = false;
-		this->reverso = false;
+		this->reverse = false;
 	}
 
-	void printArco()
+	void printArc()
 	{
 		printf("%d -> %d\n",this->a, this->b);
 	}
@@ -42,13 +44,13 @@ public:
 			return false;
 	}
 
-	bool isReverso()
+	bool isReverse()
 	{
-		return this->reverso;
+		return this->reverse;
 	}
-	void setReverso(bool r)
+	void setReverse(bool r)
 	{
-		this->reverso = r;
+		this->reverse = r;
 	}
 	void setTree(bool v)
 	{
@@ -60,7 +62,7 @@ public:
 		return this->tree;
 	}
 
-	void setCustoArt()
+	void setArtificialCost()
 	{
 		this->p = 1;
 	}
@@ -75,7 +77,7 @@ public:
 		return this->a;
 	}
 
-	int getOposto(int v)
+	int getOpposite(int v)
 	{
 		if(v == this->a)
 			return this->b;
@@ -84,49 +86,36 @@ public:
 		else
 		{
 			return 0;
-			printf("This shouldn't have happened!");
+			printf("%d não é uma de minhas pontas!", v);
 		}
 	}
 
-	double getCusto(bool ini)
+	double getCost(bool ini)
 	{
 		if(ini) return this->p;
-		else return this->custo;
+		else return this->cost;
 	}
-	void setFluxo(double f)
+	void setFlow(double f)
 	{
-		this->fluxo = f;
+		this->flow = f;
 	}
-	double getFluxo()
+	double getFlow()
 	{
-		return this->fluxo;
+		return this->flow;
 	}
 
 };
 
-class Grafo
+class Network
 {
 private:
 	int v;
+	int source;
+	int sink;
 	
-	vector<double> demanda;
-	vector<double> custoParcial;
+	vector<double> demand;
+	vector<double> parcialCost;
 	vector<int> depth;
-
-public:
-	vector<list<Arco> > adj;
-	vector<list<Arco*> > inc;
-	Grafo(int v)
-	{
-		this->v = v;
-		adj.resize(v);
-		inc.resize(v);
-		demanda.resize(v);
-		depth.resize(v);
-		custoParcial.resize(v);
-		for(int i = 0; i < custoParcial.size(); i++)
-			custoParcial[i] = INFINITY;
-	}
 
 	int getDepth(int v)
 	{
@@ -138,114 +127,94 @@ public:
 		this->depth[v] = val;
 	}
 
-	void atualizaCusto(int v, double val)
+	void setParcialCost(int v, double val)
 	{
-		custoParcial[v] = val;
+		this->parcialCost[v] = val;
 	}
 
-	void setDemanda(int v, double dem)
+	double getParcialCost(int v)
 	{
-		demanda[v] = dem;
+		return this->parcialCost[v];
 	}
 
-	double getDemanda(int v)
+	void setDemand(int v, double dem)
 	{
-		return this->demanda[v];
+		this->demand[v] = dem;
 	}
 
-	Arco* novoArco(int a, int b, int custo)
+	double getDemand(int v)
 	{
-		Arco arco (a, b, custo, 0);//arcos originais tem fluxo zero à principio
-		Arco* ac;
+		return this->demand[v];
+	}
+
+	void addArtificialArcs(int fonte)//vai ser a fonte
+	{
+		vector<bool> label(this->getV(), false);
 		
-		adj[a].push_back(arco);
-		ac = &adj[a].back();
+		this->setParcialCost(fonte, 0);//custo parcial da raiz é nulo
+		this->setDepth(fonte, 0);
+		label[fonte] = true;//nao quero por arcos para mim mesmo
 
-		inc[b].push_back(ac);
-
-		return ac;
-	}
-
-	Arco* novoArco(int a, int b, int custo, double fluxo)
-	{
-		Arco arco (a, b, custo, fluxo);
-		Arco* ac;
-
-		adj[a].push_back(arco);
-		ac = &adj[a].back();
-		
-		inc[b].push_back(ac);
-
-		return ac;
-	}
-
-	void addArcosArtificiais(int v)//v vai ser a fonte
-	{
-		vector<bool> b(this->v, false);
-		
-		this->custoParcial[v] = 0;//custo parcial da raiz é nulo
-		this->setDepth(v, 0);
-		b[v] = true;//nao quero por arcos para mim mesmo
-
-		for(auto& arc : this->adj[v])
+		for(auto& arc : this->adj[fonte])
 		{
-			b[arc.getTarget()] = true;
-			this->custoParcial[arc.getTarget()] = 0;
+			label[arc.getTarget()] = true;
+			this->setParcialCost(arc.getTarget(), 0);
+			arc.setFlow(getDemand(arc.getTarget()));
 			arc.setTree(true);
 			this->setDepth(arc.getTarget(), 1);
 		}
-
-		for(int i = 0; i < b.size(); i++)
-			if(b[i] == false)
+		
+		for(int i = 0; i < label.size(); i++)
+		{
+			if(label[i] == false)
 			{
-				Arco* a = novoArco(v, i, 0, this->getDemanda(i));//custo 'original' zero, por razoes
-				a->setCustoArt();
+				Arc* a = this->newArc(fonte, i, 0, this->getDemand(i));//custo 'original' zero, por razoes
+				a->setArtificialCost();//custo artificial 1
 				a->setTree(true);
-				this->custoParcial[i] = 1;
+				this->setParcialCost(i, 1);
 				this->setDepth(i, 1);
 			}
-
+		}
 	}
 
-	void removeArcosArtificiais(int v)//v acabará por ser sempre a fonte
+	void removeArtificialArcs(int fonte)//v acabará por ser sempre a fonte
 	{
-		list<Arco*>::iterator it;
-		list<Arco>::iterator it2;
+		list<Arc*>::iterator it;
+		list<Arc>::iterator it2;
+		
 		/*PRIMEIRO APAGO AS REFERENCIAS*/
-		for(int i = 0; i < this->v; i++)
-			for(it = inc[i].begin(); it != inc[i].end(); it++)
+		for(int i = 0; i < this->getV(); i++)
+			for(it = inc[i].begin(); it != inc[i].end();)
 				if(!(*it)->isOriginal())
 					it = inc[i].erase(it);
+				else
+					it++;
 		/*DEPOIS OS ARCOS DE FATO(só a fonte de arcos artificiais saindo)*/
-		for(it2 = adj[v].begin(); it2 != adj[v].end(); it2++)
+		for(it2 = adj[fonte].begin(); it2 != adj[fonte].end();)
 			if(!(*it2).isOriginal())
-				it2 = adj[v].erase(it2);
-
+				it2 = adj[fonte].erase(it2);
+			else
+				it2++;
 	}
 
-	Arco* procuraCandidato(bool ini)//ini diz se usaresmos os custos artificiais ou não
+	Arc* findEnteringArc(bool ini)//ini diz se usaresmos os custos artificiais ou não
 	{
-		for(int i = 0; i < this->v; i++)
+		for(int i = 0; i < this->getV(); i++)
 			for(auto& arc : this->adj[i])
-			{
-				if((!arc.isOnTree()) && ((custoParcial[i]+arc.getCusto(ini)) < custoParcial[arc.getTarget()]))
-				{
+				if(!arc.isOnTree() and ((getParcialCost(i)+arc.getCost(ini)) < getParcialCost(arc.getTarget())))
 					return &arc;
-				}
-			}
 
 		return nullptr;
 	}
 
-	int achaCiclo(Arco* e, list<Arco*>& ciclo, double& min_flow)//retorna em qual dos lados houve o corte
+	int findCycle(Arc* e, list<Arc*>& ciclo, double& min_flow)//retorna em qual dos lados houve o corte
 	{
 		int a = e->getOrigin();
 		int b = e->getTarget();
 		int c = a;
 		int diff_c = 0;
 		bool aux;
-		//list<Arco>::iterator arc;
-		//list<Arco*>::iterator arc_ptr;
+		
 		min_flow = INFINITY;
 		
 		ciclo.push_back(e);
@@ -255,41 +224,35 @@ public:
 		
 		int v_atual = c;//C É TAMBÉM A PONTA DA QUAL SURGIU O MENOR FLUXO, PELO MENOS À PRINCIPIO
 		
-		//printf("%d\n", diff_c);
 		while(diff_c > 0)
 		{
 			aux = false;
 			for(auto& arc : adj[v_atual])
-			{
 				if(arc.isOnTree() and depth[v_atual] > depth[arc.getTarget()])
 				{	
 					ciclo.push_back(&arc);
 					aux = true;//nao precisa procurar nos incidentes
-					if(c == a and arc.getFluxo() < min_flow)
+					if(c == a and arc.getFlow() < min_flow)
 					{
-						arc.setReverso(true);
-						min_flow = arc.getFluxo();
+						arc.setReverse(true);
+						min_flow = arc.getFlow();
 					}
 					v_atual = arc.getTarget();
 					break;
 				}
-			}
 			if(!aux)
 				for(auto& arc_ptr : inc[v_atual])
-				//for(arc_ptr = inc[v_atual].begin(); arc_ptr != inc[v_atual].end(); arc_ptr++)
-				{
 					if(arc_ptr->isOnTree() and depth[v_atual] > depth[arc_ptr->getOrigin()])
 					{
 						ciclo.push_back(arc_ptr);
-						if(c == b and arc_ptr->getFluxo() < min_flow)
+						if(c == b and arc_ptr->getFlow() < min_flow)
 						{
-							arc_ptr->setReverso(true);
-							min_flow = arc_ptr->getFluxo();
+							arc_ptr->setReverse(true);
+							min_flow = arc_ptr->getFlow();
 						}
 						v_atual = arc_ptr->getOrigin();
 						break;
 					}
-				}
 			diff_c--;
 		}
 
@@ -309,10 +272,10 @@ public:
 				{
 					ciclo.push_back(&arc);
 					aux = true;//nao precisa procurar nos incidentes
-					if(c == a and arc.getFluxo() < min_flow)
+					if(c == a and arc.getFlow() < min_flow)
 					{
-						arc.setReverso(true);
-						min_flow = arc.getFluxo();
+						arc.setReverse(true);
+						min_flow = arc.getFlow();
 						ladoCorte = a;
 					}
 					v_atual1 = arc.getTarget();
@@ -326,10 +289,10 @@ public:
 					if(arc_ptr->isOnTree() and depth[v_atual1] > depth[arc_ptr->getOrigin()])
 					{
 						ciclo.push_back(arc_ptr);
-						if(c == b and arc_ptr->getFluxo() < min_flow)
+						if(c == b and arc_ptr->getFlow() < min_flow)
 						{
-							arc_ptr->setReverso(true);
-							min_flow = arc_ptr->getFluxo();
+							arc_ptr->setReverse(true);
+							min_flow = arc_ptr->getFlow();
 							ladoCorte = b;
 						}
 						v_atual1 = arc_ptr->getOrigin();
@@ -344,10 +307,10 @@ public:
 				{
 					ciclo.push_back(&arc);
 					aux = true;//nao precisa procurar nos incidentes
-					if(c != a and arc.getFluxo() < min_flow)
+					if(c != a and arc.getFlow() < min_flow)
 					{
-						arc.setReverso(true);
-					 	min_flow = arc.getFluxo();
+						arc.setReverse(true);
+					 	min_flow = arc.getFlow();
 					 	ladoCorte = a;
 					}
 					v_atual2 = arc.getTarget();
@@ -360,10 +323,10 @@ public:
 					if(arc_ptr->isOnTree() and depth[v_atual2] > depth[arc_ptr->getOrigin()])
 					{
 						ciclo.push_back(arc_ptr);
-						if(c != b and arc_ptr->getFluxo() < min_flow)
+						if(c != b and arc_ptr->getFlow() < min_flow)
 						{
-							arc_ptr->setReverso(true);
-						 	min_flow = arc_ptr->getFluxo();
+							arc_ptr->setReverse(true);
+						 	min_flow = arc_ptr->getFlow();
 						 	ladoCorte = b;
 						}
 						v_atual2 = arc_ptr->getOrigin();
@@ -374,10 +337,10 @@ public:
 		return ladoCorte;
 	}
 
-	void consertaArvore(list<Arco*>& ciclo, double min_flow, int ladoCorte, bool ini)//o primeiro elemento é o arco que entrará
+	void fixTree(list<Arc*>& ciclo, double min_flow, int ladoCorte, bool ini)//o primeiro elemento é o arco que entrará
 	{
-		Arco* arco_saida = nullptr;
-		Arco* arco_entra;
+		Arc* arco_saida = nullptr;
+		Arc* arco_entra;
 		int a, b;
 		int v_fixo;
 
@@ -386,48 +349,47 @@ public:
 		b = arco_entra->getTarget();
 
 		/********** ATUALIZA OS FLUXOS ************/
-		list<Arco*>::iterator it;
+		list<Arc*>::iterator it;
 		for(it = ciclo.begin(); it != ciclo.end(); it++)
 		{
-			if((*it)->isReverso())
+			if((*it)->isReverse())
 			{
-				(*it)->setFluxo((*it)->getFluxo() - min_flow);
+				(*it)->setFlow((*it)->getFlow() - min_flow);
 				if(arco_saida == nullptr){arco_saida = *it;}
 			}
 			else
-				(*it)->setFluxo((*it)->getFluxo() + min_flow);
+				(*it)->setFlow((*it)->getFlow() + min_flow);
 		}
 		/****** TIRA ARCO DA ARVORE **************/
 		arco_saida->setTree(false);
-		//printf("ARCO SAIDA: ");arco_saida->printArco();
 
 		/********* ATUALIZA AS PROFUNDIDADES E OS CUSTOS PARCIAIS *******/
-		v_fixo = arco_entra->getOposto(ladoCorte);
+		v_fixo = arco_entra->getOpposite(ladoCorte);
 		this->setDepth(ladoCorte, getDepth(v_fixo)+1);
 		
-		if(ladoCorte == a)//ladoCorte é a bunda
-			custoParcial[ladoCorte] = custoParcial[b] - arco_entra->getCusto(ini);
-		else//ladoCorte é a cabeça
-			custoParcial[ladoCorte] = custoParcial[a] + arco_entra->getCusto(ini);
-
-		this->arrumaDepthCusto(ladoCorte, ini);//ainda não inclui o novo arco na arvore
+		if(ladoCorte == a)//ladoCorte é a origem
+			setParcialCost(ladoCorte, getParcialCost(b) - arco_entra->getCost(ini));
+		else//ladoCorte é o destino
+			setParcialCost(ladoCorte, getParcialCost(a) + arco_entra->getCost(ini));
+			
+		this->fixDepthCost(ladoCorte, ini);//ainda não inclui o novo arco na arvore
 
 		/************ DESMARCO OS REVERSOS *****************/
 		for(it = ciclo.begin(); it != ciclo.end(); it++)
-			(*it)->setReverso(false);
+			(*it)->setReverse(false);
 		
 		/****** PONHO O ARCO DE ENTRADA NA ARVORE ******/
 		arco_entra->setTree(true);
 	}
 
-	void arrumaDepthCusto(int fix_me, bool ini)//este nó está com custoParcial e depth correto
+	void fixDepthCost(int fix_me, bool ini)//este nó está com custoParcial e depth correto
 	{
-		vector<bool> lbl(this->v, false);
+		vector<bool> lbl(this->getV(), false);
 		queue<int> fila;
 		int v_atual, vizinho;
 		bool aux;
-		list<Arco>::iterator it1;
-		list<Arco*>::iterator it2;
+		list<Arc>::iterator it1;
+		list<Arc*>::iterator it2;
 
 		fila.push(fix_me);
 		lbl[fix_me] = true;
@@ -443,7 +405,7 @@ public:
 				if((*it1).isOnTree() and !lbl[vizinho])
 				{
 					setDepth(vizinho, getDepth(v_atual)+1);//arruma depth
-					custoParcial[vizinho] = custoParcial[v_atual] + (*it1).getCusto(ini);//arruma custoParcial
+					setParcialCost(vizinho, getParcialCost(v_atual) + (*it1).getCost(ini));//arruma custo parcial
 					fila.push(vizinho);
 					lbl[vizinho] = true;
 					aux = true;
@@ -455,7 +417,7 @@ public:
 				if((*it2)->isOnTree() and !lbl[vizinho])
 				{
 					setDepth(vizinho, getDepth(v_atual)+1);//arruma depth
-					custoParcial[vizinho] = custoParcial[v_atual] - (*it2)->getCusto(ini);//arruma custoParcial
+					setParcialCost(vizinho, getParcialCost(v_atual) - (*it2)->getCost(ini));//arruma custo parcial
 					fila.push(vizinho);
 					lbl[vizinho] = true;
 				}	
@@ -463,127 +425,149 @@ public:
 		}
 	}
 
-	bool inicializa(int fonte)
+public:
+	vector<list<Arc> > adj;
+	vector<list<Arc*> > inc;
+
+	Network(fstream& file)
 	{
-		addArcosArtificiais(fonte);
-		Arco* cand;
-		list<Arco*> ciclo;
+		int demand, origin, target;
+		double cost;
+
+		file >> this->v;
+		file >> this->source;
+		file >> this->sink;
+		file >> demand;
+		
+		this->adj.resize(this->v);
+		this->inc.resize(this->v);
+		this->depth.resize(this->v);
+		this->demand.resize(this->v);
+		this->parcialCost.resize(this->v);
+
+		for(int i = 0; i < this->v; i++)
+			this->setDemand(i, 0);
+
+		this->setDemand(this->getSource(), -demand);
+		this->setDemand(this->getSink(), demand);
+		
+		for(int i = 0; i < this->v; i++)
+			this->setParcialCost(i, INFINITY);
+
+		this->setParcialCost(this->getSource(), 0);
+
+		while(file >> origin >> target >> cost)
+			this->newArc(origin, target, cost, 0);//fluxo zero
+	}
+
+	int getSource()
+	{
+		return this->source;
+	}
+
+	int getSink()
+	{
+		return this->sink;
+	}
+
+	int getV()
+	{
+		return this->v;
+	}
+
+	Arc* newArc(int a, int b, int custo, double fluxo)
+	{
+		Arc arco (a, b, custo, fluxo);
+		Arc* ac;
+
+		adj[a].push_back(arco);
+		ac = &adj[a].back();
+		
+		inc[b].push_back(ac);
+
+		return ac;
+	}
+
+	bool initialize()
+	{
+		int fonte = this->getSource();
+		this->addArtificialArcs(fonte);
+		
+		Arc* cand;
+		list<Arc*> ciclo;
 		double min_flow;
 		int ladoCorte;
 		
 		/*PROCURO SOLUÇÃO INICIAL*/
-		while((cand = procuraCandidato(true)) != nullptr)//true pois estamos usando os custos artificiais
+		while((cand = this->findEnteringArc(true)) != nullptr)//true pois estamos usando os custos artificiais
 		{
-			/*for(int i = 0; i< this->v; i++)
-				printf("NÓ %d : custo %f, depth %d\n", i, custoParcial[i], depth[i]);
-	
-			printf("ARCO ENTRADA: ");cand->printArco();*/
-			
-			ladoCorte = achaCiclo(cand, ciclo, min_flow);//min_flow é alterado la dentro
-			/*for(auto& arco : ciclo)
-			{
-				printf("\t");
-				arco->printArco();
-			}
-			printf("LADO CORTE %d\n", ladoCorte);*/
-
-			consertaArvore(ciclo, min_flow, ladoCorte, true);
+			ladoCorte = this->findCycle(cand, ciclo, min_flow);//min_flow é alterado la dentro
+			fixTree(ciclo, min_flow, ladoCorte, true);
 			ciclo.clear();
 		}
-		//for(int i = 0; i< this->v; i++)
-		//		printf("NÓ %d : custo %f, depth %d\n", i, custoParcial[i], depth[i]);
 
 		/*VERIFICO SE TODOS OS ARCOS DA ARVORE SÃO ORIGINAIS*/
-		list<Arco>::iterator it;
+		list<Arc>::iterator it;
 		for(it = adj[fonte].begin(); it != adj[fonte].end(); it++)
 			if((*it).isOnTree() and !(*it).isOriginal())
 				return false;
 		
-		/*for(int i = 0; i< this->v; i++)
-		{
-			printf("CUSTO NÓ %d : %f\n", i, custoParcial[i]);
-			printf("DEPTH NÓ %d : %d\n", i, depth[i]);
-			for(it = adj[i].begin(); it != adj[i].end(); it++)
-				if((*it).isOnTree())
-				{
-					printf("arco: ");
-					(*it).printArco();
-					printf("\t custo: %f\n",(*it).getCusto(true));
-					printf("\t fluxo: %f\n",(*it).getFluxo());
-				}
-		}*/
 		/*REMOVO ARCOS ARTIFICIAIS*/
-		removeArcosArtificiais(fonte);
+		removeArtificialArcs(fonte);
 		
 		/*DEIXO DEPTH E CUSTOS INCIAIS PRONTOS*/
-		arrumaDepthCusto(fonte, false);
-
-		for(int i = 0; i< this->v; i++)
-			printf("NÓ %d : custo %f, depth %d\n", i, custoParcial[i], depth[i]);
-
-		for(int i = 0; i< this->v; i++)
-			for(auto& arco : adj[i])
-				if(arco.isOnTree())
-				{
-					printf("arco: ");
-					arco.printArco();
-					//printf("\t custo: %f\n",(*it).getCusto(true));
-					printf("\t fluxo: %f\n", arco.getFluxo());
-				}
-		
+		fixDepthCost(fonte, false);
 
 		return true;
 	}
 
-	void executaSimplexRede()//o grafo já está com uma arvore factivel
+	void executeSimplex()//o grafo já está com uma arvore factivel
 	{
-		Arco* cand;
-		list<Arco*> ciclo;
+		Arc* cand;
+		list<Arc*> ciclo;
 		double min_flow;
 		int ladoCorte;
 
 		/*PARO QUANDO NÃO HOUVER MAIS CANDIDATOS À ENTRAR NA ÁRVORE*/
-		while((cand = procuraCandidato(false)) != nullptr)//false pois estamos usando os custos reais
+		while((cand = this->findEnteringArc(false)) != nullptr)//false pois estamos usando os custos reais
 		{
-			ladoCorte = achaCiclo(cand, ciclo, min_flow);//min_flow é alterado la dentro
-			consertaArvore(ciclo, min_flow, ladoCorte, false);
+			ladoCorte = this->findCycle(cand, ciclo, min_flow);//min_flow é alterado la dentro
+			fixTree(ciclo, min_flow, ladoCorte, false);
 			ciclo.clear();
 		}
 	}
 
-	void mostraResposta(int pia)//imprime o custo para chegar na pia
+	void showAnswer()//imprime o custo para chegar na pia
 	{
-		printf("%f\n",this->custoParcial[pia]);
+		int pia = this->getSink();
+
+		for(int i = 0; i < this->getV(); i++)
+			for(auto& arco : adj[i])
+				if(arco.isOnTree())
+					printf("%d, %d - %f\n",arco.getOrigin(), arco.getTarget(), arco.getFlow());
+		
+		printf("%f\n",this->getParcialCost(pia));
 	}
 };
 
-
-int main()
+int main(int argc, char* argv[])
 {
-	int n, fonte, pia, a, b, custo;
-	double dem;
+	fstream entrada;
+	fstream saida;
 	
-	cin >> n;
-	cin >> fonte;
-	cin >> pia;
-	cin >> dem;
-
-	Grafo g(n);
-
-	g.setDemanda(fonte, -dem);
-	g.setDemanda(pia, dem);
-
-	while(cin >> a >> b >> custo)
-	{
-		g.novoArco(a, b, custo);
-	}
-
-	if(!g.inicializa(fonte))
+	string nome_entra = "";
+	nome_entra += argv[1];
+	entrada.open(nome_entra);
+	
+	Network net(entrada);
+	entrada.close();
+	
+	if(!net.initialize())
 	{
 		printf("Problema inviável\n");
 		return 1;
 	}
 
-	g.executaSimplexRede();
-	g.mostraResposta(pia);
+	net.executeSimplex();
+	net.showAnswer();
 }
