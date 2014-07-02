@@ -1,0 +1,11 @@
+Para compilar o EP digite:
+make
+
+Será gerado o executável "simplex"
+
+Para rodar o executável, faça:
+./simplex arquivo_entrada
+
+Será gerado um arquivo "saida.dat"
+com todos os arcos, seguidos de seus custos e fluxos.
+No final também aparece o valor da função objetivo (custo total).

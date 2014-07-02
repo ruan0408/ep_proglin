@@ -374,13 +374,12 @@ void Network::executeSimplex()//o grafo já está com uma arvore factivel
 void Network::showAnswer(ofstream& saida)//imprime o custo para chegar na pia
 {
 	int pia = this->getSink();
-
+	saida << "origem destino custo fluxo" << endl;
 	for(int i = 0; i < this->getV(); i++)
 		for(auto& arco : this->neighborsOf(i))
-			if(arco.isOnTree())
-				saida << arco.getOrigin() << ", " << arco.getTarget() << " - "<< arco.getFlow() << endl;
+			saida << arco.getOrigin() << "\t\t" << arco.getTarget() << "\t\t" << arco.getCost(false) << "\t\t" << arco.getFlow() << endl;
 	
-	saida << "custo total: " << this->getParcialCost(pia) << endl;
+	saida << "custo total: " << this->getParcialCost(pia)*this->getDemand(this->getSink()) << endl;
 }
 
 /*int Network::findCycle(Arc* e, list<Arc*>& ciclo, double& min_flow)//retorna em qual dos lados houve o corte
