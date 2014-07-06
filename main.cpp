@@ -1,3 +1,6 @@
+//Nome: Ruan de Menezes Costa
+//NUSP: 7990929
+
 #include "Network.hpp"
 
 using namespace std;
